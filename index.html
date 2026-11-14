@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Start CodeCoast</title>
+<style>
+  :root{--ink:#131313;--bg:#F7F7F7;--lime:#D2FF52;--blue:#1C46F5}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ink:#f2f2f2;--bg:#111}}
+  :root[data-theme="dark"]{--ink:#f2f2f2;--bg:#111}
+  *{box-sizing:border-box;margin:0}
+  body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:grid;place-items:center;padding:16px}
+  .card{max-width:560px;width:100%;background:var(--blue);color:#fff;border-radius:28px;padding:36px}
+  h1{font-size:32px;margin-bottom:8px}
+  p{opacity:.85;line-height:1.6;margin:12px 0}
+  ol{margin:16px 0 0 20px;line-height:1.9}
+  code{background:rgba(255,255,255,.15);padding:2px 8px;border-radius:6px}
+  b{color:var(--lime)}
+  a{color:var(--lime)}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Almost there 🌊</h1>
+    <p>This website has a server (for registrations, referrals, merch orders and the admin dashboard), so it can't run by opening an HTML file. Start it like this:</p>
+    <ol>
+      <li>Install <a href="https://nodejs.org" target="_blank" rel="noopener">Node.js</a> (LTS version) if you don't have it.</li>
+      <li><b>Windows:</b> double-click <code>start.bat</code><br/><b>Mac:</b> double-click <code>start.command</code></li>
+      <li>The site opens at <a href="http://localhost:3000">http://localhost:3000</a> — keep the black window open while using it.</li>
+    </ol>
+  </div>
+</body>
+</html>
