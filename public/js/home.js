@@ -42,7 +42,7 @@ gsap.to('.hero-title', { yPercent: -25, opacity: .3, ease: 'none', scrollTrigger
   hero.addEventListener('mousemove', (e) => {
     const r = hero.getBoundingClientRect();
     const cx = Math.floor((e.clientX - r.left) / CELL), cy = Math.floor((e.clientY - r.top) / CELL);
-    cells.set(cx + ',' + cy, { x: cx, y: cy, life: 1, c: Math.random() < .5 ? '28,70,245' : '210,255,82' });
+    cells.set(cx + ',' + cy, { x: cx, y: cy, life: 1, c: Math.random() < .5 ? '128,1,31' : '197,160,89' });
   });
   (function loop() {
     ctx.clearRect(0, 0, w, h);

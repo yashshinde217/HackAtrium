@@ -266,7 +266,7 @@ function confetti(originEl) {
   if (REDUCE) return;
   const r = originEl ? originEl.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 };
   const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-  const colors = ['#D2FF52', '#1C46F5', '#131313', '#ffffff'];
+  const colors = ['#80011F', '#C5A059', '#170208', '#FAE7BD'];
   for (let i = 0; i < 60; i++) {
     const p = document.createElement('i');
     p.className = 'confetti';
