@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const db = require('./db');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,11 +71,12 @@ function limit(max = 10, windowMs = 60_000) {
 }
 setInterval(() => hits.clear(), 10 * 60_000).unref();
 
-function makeCode(name) {
+async function makeCode(name) {
   const base = (name.replace(/[^a-z]/gi, '').toUpperCase() + 'XXXX').slice(0, 4);
   for (;;) {
     const code = `HA-${base}${crypto.randomInt(100, 999)}`;
-    if (!db.prepare('SELECT 1 FROM ambassadors WHERE code = ?').get(code)) return code;
+    const check = await db.query('SELECT 1 FROM ambassadors WHERE code = $1', [code]);
+    if (check.rows.length === 0) return code;
   }
 }
 
@@ -84,72 +86,122 @@ function makeCode(name) {
 const POINTS_PER_MEMBER = 25;
 const TRACKS = ['Hack Atrium Open', 'Build For Good'];
 
-app.post('/api/register', limit(5), (req, res) => {
-  const b = req.body || {};
-  const team = clean(b.teamName, 60), track = clean(b.track, 40);
-  const leader = { name: clean(b.leaderName, 80), email: clean(b.leaderEmail, 120).toLowerCase(), phone: clean(b.leaderPhone, 20) };
-  const college = clean(b.college, 120), idea = clean(b.idea, 1000), ref = clean(b.referralCode, 20).toUpperCase();
-  const members = Array.isArray(b.members) ? b.members.slice(0, 3).map((m) => ({ name: clean(m?.name, 80), email: clean(m?.email, 120).toLowerCase() })).filter((m) => m.name || m.email) : [];
+app.post('/api/register', limit(5), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const team = clean(b.teamName, 60), track = clean(b.track, 40);
+    const leader = { name: clean(b.leaderName, 80), email: clean(b.leaderEmail, 120).toLowerCase(), phone: clean(b.leaderPhone, 20) };
+    const college = clean(b.college, 120), idea = clean(b.idea, 1000), ref = clean(b.referralCode, 20).toUpperCase();
+    const members = Array.isArray(b.members) ? b.members.slice(0, 3).map((m) => ({ name: clean(m?.name, 80), email: clean(m?.email, 120).toLowerCase() })).filter((m) => m.name || m.email) : [];
 
-  if (!team || !leader.name || !college) return bad(res, 'Please fill in team name, your name and college.');
-  if (!TRACKS.includes(track)) return bad(res, 'Please choose a track.');
-  if (!EMAIL.test(leader.email)) return bad(res, 'Please enter a valid email address.');
-  if (!PHONE.test(leader.phone)) return bad(res, 'Please enter a valid phone number.');
-  if (members.length < 1) return bad(res, 'Teams need at least 2 members (you + 1).');
-  for (const m of members) if (!m.name || !EMAIL.test(m.email)) return bad(res, 'Every team member needs a name and a valid email.');
-  if (!b.agree) return bad(res, 'Please accept the Code of Conduct.');
-  if (db.prepare('SELECT 1 FROM registrations WHERE leader_email = ?').get(leader.email)) return bad(res, 'A team is already registered with this email.', 409);
+    if (!team || !leader.name || !college) return bad(res, 'Please fill in team name, your name and college.');
+    if (!TRACKS.includes(track)) return bad(res, 'Please choose a track.');
+    if (!EMAIL.test(leader.email)) return bad(res, 'Please enter a valid email address.');
+    if (!PHONE.test(leader.phone)) return bad(res, 'Please enter a valid phone number.');
+    if (members.length < 1) return bad(res, 'Teams need at least 2 members (you + 1).');
+    for (const m of members) if (!m.name || !EMAIL.test(m.email)) return bad(res, 'Every team member needs a name and a valid email.');
+    if (!b.agree) return bad(res, 'Please accept the Code of Conduct.');
 
-  let amb = null;
-  if (ref) {
-    amb = db.prepare('SELECT id, name FROM ambassadors WHERE code = ?').get(ref);
-    if (!amb) return bad(res, 'That referral code does not exist. Leave it empty or check for typos.');
+    const existingTeam = await db.query('SELECT 1 FROM registrations WHERE leader_email = $1', [leader.email]);
+    if (existingTeam.rows.length > 0) return bad(res, 'A team is already registered with this email.', 409);
+
+    let amb = null;
+    if (ref) {
+      const ambCheck = await db.query('SELECT id, name FROM ambassadors WHERE code = $1', [ref]);
+      if (ambCheck.rows.length === 0) return bad(res, 'That referral code does not exist. Leave it empty or check for typos.');
+      amb = ambCheck.rows[0];
+    }
+
+    const insertRes = await db.query(
+      `INSERT INTO registrations (team_name, track, leader_name, leader_email, leader_phone, college, members, idea, referral_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [team, track, leader.name, leader.email, leader.phone, college, JSON.stringify(members), idea, amb ? ref : null]
+    );
+
+    const insertedId = insertRes.rows[0].id;
+
+    if (amb) {
+      await db.query('UPDATE ambassadors SET points = points + $1 WHERE id = $2', [POINTS_PER_MEMBER * (members.length + 1), amb.id]);
+    }
+
+    res.json({ ok: true, id: insertedId, ticket: `HA01-${String(insertedId).padStart(4, '0')}`, referredBy: amb ? amb.name : null });
+  } catch (err) {
+    console.error('Registration error:', err);
+    bad(res, 'Internal server error during registration', 500);
   }
-  const info = db.prepare(`INSERT INTO registrations (team_name,track,leader_name,leader_email,leader_phone,college,members,idea,referral_code)
-    VALUES (?,?,?,?,?,?,?,?,?)`).run(team, track, leader.name, leader.email, leader.phone, college, JSON.stringify(members), idea, amb ? ref : null);
-  if (amb) db.prepare('UPDATE ambassadors SET points = points + ? WHERE id = ?').run(POINTS_PER_MEMBER * (members.length + 1), amb.id);
-  res.json({ ok: true, id: info.lastInsertRowid, ticket: `HA01-${String(info.lastInsertRowid).padStart(4, '0')}`, referredBy: amb ? amb.name : null });
 });
 
-app.post('/api/referrals', limit(5), (req, res) => {
-  const b = req.body || {};
-  const d = { name: clean(b.name, 80), phone: clean(b.phone, 20), email: clean(b.email, 120).toLowerCase(), college: clean(b.college, 120), department: clean(b.department, 60), semester: clean(b.semester, 20) };
-  if (!d.name || !d.college) return bad(res, 'Please fill in your name and college.');
-  if (!EMAIL.test(d.email)) return bad(res, 'Please enter a valid email address.');
-  if (!PHONE.test(d.phone)) return bad(res, 'Please enter a valid phone number.');
-  const existing = db.prepare('SELECT code, points FROM ambassadors WHERE email = ?').get(d.email);
-  if (existing) return res.json({ ok: true, code: existing.code, points: existing.points, existing: true });
-  const code = makeCode(d.name);
-  db.prepare('INSERT INTO ambassadors (code,name,phone,email,college,department,semester) VALUES (?,?,?,?,?,?,?)')
-    .run(code, d.name, d.phone, d.email, d.college, d.department, d.semester);
-  res.json({ ok: true, code, points: 0 });
+app.post('/api/referrals', limit(5), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const d = { name: clean(b.name, 80), phone: clean(b.phone, 20), email: clean(b.email, 120).toLowerCase(), college: clean(b.college, 120), department: clean(b.department, 60), semester: clean(b.semester, 20) };
+    if (!d.name || !d.college) return bad(res, 'Please fill in your name and college.');
+    if (!EMAIL.test(d.email)) return bad(res, 'Please enter a valid email address.');
+    if (!PHONE.test(d.phone)) return bad(res, 'Please enter a valid phone number.');
+
+    const existing = await db.query('SELECT code, points FROM ambassadors WHERE email = $1', [d.email]);
+    if (existing.rows.length > 0) return res.json({ ok: true, code: existing.rows[0].code, points: existing.rows[0].points, existing: true });
+
+    const code = await makeCode(d.name);
+    await db.query(
+      'INSERT INTO ambassadors (code, name, phone, email, college, department, semester) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [code, d.name, d.phone, d.email, d.college, d.department, d.semester]
+    );
+    res.json({ ok: true, code, points: 0 });
+  } catch (err) {
+    console.error('Referral error:', err);
+    bad(res, 'Internal server error', 500);
+  }
 });
 
-app.get('/api/referrals/leaderboard', (req, res) => {
-  const rows = db.prepare('SELECT name, college, points FROM ambassadors WHERE points > 0 ORDER BY points DESC, created_at ASC LIMIT 10').all();
-  // only first name + initial for privacy
-  res.json({ ok: true, rows: rows.map((r) => ({ name: r.name.split(' ')[0] + (r.name.split(' ')[1] ? ' ' + r.name.split(' ')[1][0] + '.' : ''), college: r.college, points: r.points })) });
+app.get('/api/referrals/leaderboard', async (req, res) => {
+  try {
+    const result = await db.query('SELECT name, college, points FROM ambassadors WHERE points > 0 ORDER BY points DESC, created_at ASC LIMIT 10');
+    const rows = result.rows;
+    res.json({ ok: true, rows: rows.map((r) => ({ name: r.name.split(' ')[0] + (r.name.split(' ')[1] ? ' ' + r.name.split(' ')[1][0] + '.' : ''), college: r.college, points: r.points })) });
+  } catch (err) {
+    console.error('Leaderboard error:', err);
+    bad(res, 'Internal server error', 500);
+  }
 });
 
-app.get('/api/referrals/:code', (req, res) => {
-  const r = db.prepare('SELECT name, points FROM ambassadors WHERE code = ?').get(clean(req.params.code, 20).toUpperCase());
-  if (!r) return bad(res, 'Code not found', 404);
-  const teams = db.prepare('SELECT COUNT(*) AS n FROM registrations WHERE referral_code = ?').get(req.params.code.toUpperCase()).n;
-  res.json({ ok: true, name: r.name.split(' ')[0], points: r.points, teams });
+app.get('/api/referrals/:code', async (req, res) => {
+  try {
+    const cleanCode = clean(req.params.code, 20).toUpperCase();
+    const ambResult = await db.query('SELECT name, points FROM ambassadors WHERE code = $1', [cleanCode]);
+    if (ambResult.rows.length === 0) return bad(res, 'Code not found', 404);
+    const r = ambResult.rows[0];
+
+    const teamsResult = await db.query('SELECT COUNT(*) AS n FROM registrations WHERE referral_code = $1', [cleanCode]);
+    const teams = parseInt(teamsResult.rows[0].n, 10);
+
+    res.json({ ok: true, name: r.name.split(' ')[0], points: r.points, teams });
+  } catch (err) {
+    console.error('Referral lookup error:', err);
+    bad(res, 'Internal server error', 500);
+  }
 });
 
-app.post('/api/contact', limit(5), (req, res) => {
-  const b = req.body || {};
-  const kind = b.kind === 'sponsor' ? 'sponsor' : 'general';
-  const d = { first: clean(b.firstName, 60), last: clean(b.lastName, 60), email: clean(b.email, 120).toLowerCase(), phone: clean(b.phone, 20), company: clean(b.company, 100), tier: clean(b.tier, 30), msg: clean(b.message, 3000) };
-  if (!d.first) return bad(res, 'Please tell us your name.');
-  if (!EMAIL.test(d.email)) return bad(res, 'Please enter a valid email address.');
-  if (d.phone && !PHONE.test(d.phone)) return bad(res, 'Please enter a valid phone number.');
-  if (kind === 'sponsor' && !d.company) return bad(res, 'Please tell us your company name.');
-  if (d.msg.length < 5) return bad(res, 'Please write a short message.');
-  db.prepare('INSERT INTO enquiries (kind,first_name,last_name,email,phone,company,tier,message) VALUES (?,?,?,?,?,?,?,?)')
-    .run(kind, d.first, d.last, d.email, d.phone, d.company, d.tier, d.msg);
-  res.json({ ok: true });
+app.post('/api/contact', limit(5), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const kind = b.kind === 'sponsor' ? 'sponsor' : 'general';
+    const d = { first: clean(b.firstName, 60), last: clean(b.lastName, 60), email: clean(b.email, 120).toLowerCase(), phone: clean(b.phone, 20), company: clean(b.company, 100), tier: clean(b.tier, 30), msg: clean(b.message, 3000) };
+    if (!d.first) return bad(res, 'Please tell us your name.');
+    if (!EMAIL.test(d.email)) return bad(res, 'Please enter a valid email address.');
+    if (d.phone && !PHONE.test(d.phone)) return bad(res, 'Please enter a valid phone number.');
+    if (kind === 'sponsor' && !d.company) return bad(res, 'Please tell us your company name.');
+    if (d.msg.length < 5) return bad(res, 'Please write a short message.');
+
+    await db.query(
+      'INSERT INTO enquiries (kind, first_name, last_name, email, phone, company, tier, message) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [kind, d.first, d.last, d.email, d.phone, d.company, d.tier, d.msg]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Contact error:', err);
+    bad(res, 'Internal server error', 500);
+  }
 });
 
 /* ------------------------------------------------------------------ */
@@ -176,35 +228,69 @@ const TABLES = {
   ambassadors: { sql: 'SELECT * FROM ambassadors ORDER BY points DESC, id DESC', statuses: null },
   enquiries: { sql: 'SELECT * FROM enquiries ORDER BY id DESC', statuses: ['new', 'replied', 'closed'] },
 };
-app.get('/api/admin/stats', requireAdmin, (req, res) => {
-  const n = (sql) => db.prepare(sql).get().n;
-  res.json({ ok: true, stats: {
-    teams: n('SELECT COUNT(*) n FROM registrations'),
-    hackers: db.prepare('SELECT members FROM registrations').all().reduce((s, r) => s + JSON.parse(r.members).length + 1, 0),
-    ambassadors: n('SELECT COUNT(*) n FROM ambassadors'),
-    enquiries: n("SELECT COUNT(*) n FROM enquiries WHERE status = 'new'"),
-  } });
+
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+  try {
+    const teamsRes = await db.query('SELECT COUNT(*) n FROM registrations');
+    const regAll = await db.query('SELECT members FROM registrations');
+    const hackersCount = regAll.rows.reduce((s, r) => s + JSON.parse(r.members).length + 1, 0);
+    const ambRes = await db.query('SELECT COUNT(*) n FROM ambassadors');
+    const enqRes = await db.query("SELECT COUNT(*) n FROM enquiries WHERE status = 'new'");
+
+    res.json({ ok: true, stats: {
+      teams: parseInt(teamsRes.rows[0].n, 10),
+      hackers: hackersCount,
+      ambassadors: parseInt(ambRes.rows[0].n, 10),
+      enquiries: parseInt(enqRes.rows[0].n, 10),
+    } });
+  } catch (err) {
+    console.error('Admin stats error:', err);
+    bad(res, 'Internal server error', 500);
+  }
 });
-app.get('/api/admin/:table', requireAdmin, (req, res) => {
-  const t = TABLES[req.params.table];
-  if (!t) return bad(res, 'Unknown table', 404);
-  res.json({ ok: true, rows: db.prepare(t.sql).all(), statuses: t.statuses });
+
+app.get('/api/admin/:table', requireAdmin, async (req, res) => {
+  try {
+    const t = TABLES[req.params.table];
+    if (!t) return bad(res, 'Unknown table', 404);
+    const result = await db.query(t.sql);
+    res.json({ ok: true, rows: result.rows, statuses: t.statuses });
+  } catch (err) {
+    console.error('Admin table fetch error:', err);
+    bad(res, 'Internal server error', 500);
+  }
 });
-app.patch('/api/admin/:table/:id', requireAdmin, (req, res) => {
-  const t = TABLES[req.params.table];
-  if (!t || !t.statuses) return bad(res, 'Not editable');
-  const s = String(req.body?.status);
-  if (!t.statuses.includes(s)) return bad(res, 'Invalid status');
-  db.prepare(`UPDATE ${req.params.table} SET status = ? WHERE id = ?`).run(s, Number(req.params.id));
-  res.json({ ok: true });
+
+app.patch('/api/admin/:table/:id', requireAdmin, async (req, res) => {
+  try {
+    const tableKey = req.params.table;
+    const t = TABLES[tableKey];
+    if (!t || !t.statuses) return bad(res, 'Not editable');
+    const s = String(req.body?.status);
+    if (!t.statuses.includes(s)) return bad(res, 'Invalid status');
+    
+    await db.query(`UPDATE ${tableKey} SET status = $1 WHERE id = $2`, [s, Number(req.params.id)]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Admin patch error:', err);
+    bad(res, 'Internal server error', 500);
+  }
 });
-app.get('/api/admin/:table/export.csv', requireAdmin, (req, res) => {
-  const t = TABLES[req.params.table];
-  if (!t) return bad(res, 'Unknown table', 404);
-  const rows = db.prepare(t.sql).all();
-  const cols = rows[0] ? Object.keys(rows[0]) : [];
-  const cell = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) || /^[=+\-@]/.test(s) ? `"${s.replace(/"/g, '""').replace(/^([=+\-@])/, "'$1")}"` : s; };
-  res.type('text/csv').attachment(`${req.params.table}.csv`).send([cols.join(','), ...rows.map((r) => cols.map((c) => cell(r[c])).join(','))].join('\n'));
+
+app.get('/api/admin/:table/export.csv', requireAdmin, async (req, res) => {
+  try {
+    const tableKey = req.params.table;
+    const t = TABLES[tableKey];
+    if (!t) return bad(res, 'Unknown table', 404);
+    const result = await db.query(t.sql);
+    const rows = result.rows;
+    const cols = rows[0] ? Object.keys(rows[0]) : [];
+    const cell = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) || /^[=+\-@]/.test(s) ? `"${s.replace(/"/g, '""').replace(/^([=+\-@])/, "'$1")}"` : s; };
+    res.type('text/csv').attachment(`${tableKey}.csv`).send([cols.join(','), ...rows.map((r) => cols.map((c) => cell(r[c])).join(','))].join('\n'));
+  } catch (err) {
+    console.error('CSV export error:', err);
+    bad(res, 'Internal server error', 500);
+  }
 });
 
 /* 404 */
