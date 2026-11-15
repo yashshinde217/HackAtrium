@@ -15,7 +15,7 @@ function showCode(code, points, existing) {
   $('#myCode').textContent = '';
   $('#myPoints').textContent = existing ? `Welcome back! You have ${points} points.` : 'Share it — every teammate who registers with it earns you 25 points.';
   const link = `${location.origin}/apply?ref=${encodeURIComponent(code)}`;
-  const msg = `Join me at CodeCoast S01 — a 36h seaside hackathon with ₹2L+ prizes! Register with my code ${code}: ${link}`;
+  const msg = `Join me at Hack Atrium S01 — a 36h hackathon with ₹2L+ prizes! Register with my code ${code}: ${link}`;
   $('#waShare').href = 'https://wa.me/?text=' + encodeURIComponent(msg);
   $('#copyCode').onclick = () => copy(code, 'Code copied!');
   $('#copyLink').onclick = () => copy(link, 'Invite link copied!');

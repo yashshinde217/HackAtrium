@@ -6,7 +6,7 @@ const fs = require('fs');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
-const db = new DatabaseSync(path.join(DATA_DIR, 'codecoast.db'));
+const db = new DatabaseSync(path.join(DATA_DIR, 'hackatrium.db'));
 
 db.exec(`
 PRAGMA journal_mode = WAL;
@@ -84,21 +84,5 @@ CREATE TABLE IF NOT EXISTS enquiries (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `);
-
-// Seed merch catalogue once
-const count = db.prepare('SELECT COUNT(*) AS n FROM products').get().n;
-if (!count) {
-  const ins = db.prepare(`INSERT INTO products (id,slug,name,category,badge,description,price,mrp,color,image,has_sizes)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)`);
-  ins.run('tee-white', 'official-tee-sea-salt', 'OFFICIAL TEE - Sea Salt', 'APPAREL', null,
-    'A crisp sea-salt white tee with the CodeCoast pixel wave on the chest. Oversized fit is a heavy 240 GSM cotton; Regular fit is 180 GSM with standard sleeves.',
-    299, 599, 'White', '/assets/merch/tee-white.svg', 1);
-  ins.run('tee-navy', 'official-tee-deep-ocean', 'OFFICIAL TEE - Deep Ocean', 'APPAREL', null,
-    'Deep-ocean navy tee with a lime pixel wave print. Oversized fit is a heavy 240 GSM cotton; Regular fit is 180 GSM with standard sleeves.',
-    299, 599, 'Navy', '/assets/merch/tee-navy.svg', 1);
-  ins.run('stickers', 'hacker-sticker-pack', 'HACKER STICKER PACK', 'ACCESSORIES', 'NEW DROP',
-    'Twelve weatherproof vinyl stickers for your laptop — pixel waves, terminal jokes and the CodeCoast mascot.',
-    49, 99, 'Mixed', '/assets/merch/stickers.svg', 0);
-}
 
 module.exports = db;

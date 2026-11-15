@@ -1,5 +1,5 @@
 @echo off
-title CodeCoast website
+title Hack Atrium website
 cd /d "%~dp0"
 
 where node >nul 2>nul
@@ -24,7 +24,7 @@ if not exist node_modules (
 )
 
 echo.
-echo  CodeCoast is starting at http://localhost:3000
+echo  Hack Atrium is starting at http://localhost:3000
 echo  Keep this window open while you use the site. Close it to stop the server.
 echo.
 start "" cmd /c "timeout /t 2 >nul & start http://localhost:3000"

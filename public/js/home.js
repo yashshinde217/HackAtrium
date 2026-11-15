@@ -1,4 +1,4 @@
-/* CodeCoast — home page */
+/* Hack Atrium — home page */
 
 /* ---------- hero: pixel text scramble ---------- */
 const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#@$%&*<>/';
@@ -273,14 +273,14 @@ $('#travelBtn').addEventListener('click', () => openModal($('#travelModal')));
 
 /* ---------- FAQ accordion ---------- */
 const FAQ = [
-  ['How long is the hackathon?', 'CodeCoast is a non-stop 36-hour build sprint — plenty of time to ideate, ship, iterate and polish.'],
+  ['How long is the hackathon?', 'Hack Atrium is a non-stop 36-hour build sprint — plenty of time to ideate, ship, iterate and polish.'],
   ['What is the team size?', 'Teams can have 2 to 4 members. Solo hackers can find teammates in our community Discord before the event.'],
   ['When are the problem statements revealed?', 'Problem statements drop at the opening ceremony. Everything you build must be created during the event.'],
   ['What do participants get?', 'Meals, snacks and caffeine for the full event, exclusive swag, a certificate, and plenty of chances to meet mentors and sponsors.'],
   ['How are teams shortlisted?', 'We review team profiles and past work to build a balanced, diverse cohort. Passion counts as much as experience.'],
   ['What should I bring?', 'Your laptop, chargers, any hardware you plan to use, and a reusable bottle. We provide Wi-Fi, power and food.'],
   ['Will there be mentors?', 'Yes — engineers, designers and founders will be on the floor throughout to help you get unstuck.'],
-  ['Can beginners participate?', 'Absolutely. CodeCoast is built for first-timers and veterans alike; curiosity matters more than experience.'],
+  ['Can beginners participate?', 'Absolutely. Hack Atrium is built for first-timers and veterans alike; curiosity matters more than experience.'],
   ['Can we use pre-built projects?', 'No. Open-source libraries are fine, but your project itself must be built from scratch during the hackathon.'],
 ];
 const list = $('#faqList');

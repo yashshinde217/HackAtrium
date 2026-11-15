@@ -1,5 +1,5 @@
 #!/bin/bash
-# Double-click on macOS (or run ./start.command on Linux) to start the CodeCoast website.
+# Double-click on macOS (or run ./start.command on Linux) to start the Hack Atrium website.
 cd "$(dirname "$0")"
 
 if ! command -v node >/dev/null 2>&1; then
@@ -15,7 +15,7 @@ if [ ! -d node_modules ]; then
 fi
 
 echo ""
-echo "  CodeCoast is starting at http://localhost:3000"
+echo "  Hack Atrium is starting at http://localhost:3000"
 echo "  Keep this window open while you use the site. Press Ctrl+C to stop."
 echo ""
 (sleep 2; open http://localhost:3000 2>/dev/null || xdg-open http://localhost:3000 2>/dev/null) &

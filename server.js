@@ -6,9 +6,9 @@ const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'codecoast-admin';
-const SITE = { name: 'CodeCoast', season: 'S01' };
-if (!process.env.ADMIN_PASSWORD) console.warn('⚠  ADMIN_PASSWORD not set — using the default "codecoast-admin". Set it before deploying!');
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'hackatrium-admin';
+const SITE = { name: 'Hack Atrium', season: 'S01' };
+if (!process.env.ADMIN_PASSWORD) console.warn('⚠  ADMIN_PASSWORD not set — using the default "hackatrium-admin". Set it before deploying!');
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '50kb' }));
@@ -20,19 +20,17 @@ app.use(express.static(path.join(__dirname, 'public'), { extensions: false }));
 const VIEWS = path.join(__dirname, 'views');
 const read = (f) => fs.readFileSync(path.join(VIEWS, f), 'utf8');
 const PAGES = {
-  '/':                 { view: 'home',     title: 'CodeCoast S01 — Ride the Tide of Innovation', js: ['home'] },
-  '/apply':            { view: 'apply',    title: 'Apply | CodeCoast S01', js: ['apply'] },
-  '/merch':            { view: 'merch',    title: 'Official Merch | CodeCoast S01', js: ['merch'] },
-  '/checkout':         { view: 'checkout', title: 'Your Cart | CodeCoast S01', js: ['checkout'] },
-  '/refer':            { view: 'refer',    title: 'Referral Program | CodeCoast S01', js: ['refer'] },
-  '/contact':          { view: 'contact',  title: 'Contact | CodeCoast S01', js: ['contact'] },
-  '/sponsorship':      { view: 'sponsorship', title: 'Sponsorship | CodeCoast S01', js: ['sponsorship'] },
-  '/gallery':          { view: 'gallery',  title: 'Gallery | CodeCoast S01', js: ['gallery'] },
-  '/about':            { view: 'about',    title: 'About | CodeCoast S01', js: [] },
-  '/code-of-conduct':  { view: 'code-of-conduct', title: 'Code of Conduct | CodeCoast S01', js: [] },
-  '/privacy-policy':   { view: 'privacy-policy',  title: 'Privacy Policy | CodeCoast S01', js: [] },
-  '/terms':            { view: 'terms',    title: 'Terms & Conditions | CodeCoast S01', js: [] },
-  '/admin':            { view: 'admin',    title: 'Admin | CodeCoast S01', js: ['admin'], bare: true },
+  '/':                 { view: 'home',     title: 'Hack Atrium S01 — Ride the Tide of Innovation', js: ['home'] },
+  '/apply':            { view: 'apply',    title: 'Apply | Hack Atrium S01', js: ['apply'] },
+  '/refer':            { view: 'refer',    title: 'Referral Program | Hack Atrium S01', js: ['refer'] },
+  '/contact':          { view: 'contact',  title: 'Contact | Hack Atrium S01', js: ['contact'] },
+  '/sponsorship':      { view: 'sponsorship', title: 'Sponsorship | Hack Atrium S01', js: ['sponsorship'] },
+  '/gallery':          { view: 'gallery',  title: 'Gallery | Hack Atrium S01', js: ['gallery'] },
+  '/about':            { view: 'about',    title: 'About | Hack Atrium S01', js: [] },
+  '/code-of-conduct':  { view: 'code-of-conduct', title: 'Code of Conduct | Hack Atrium S01', js: [] },
+  '/privacy-policy':   { view: 'privacy-policy',  title: 'Privacy Policy | Hack Atrium S01', js: [] },
+  '/terms':            { view: 'terms',    title: 'Terms & Conditions | Hack Atrium S01', js: [] },
+  '/admin':            { view: 'admin',    title: 'Admin | Hack Atrium S01', js: ['admin'], bare: true },
 };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -50,12 +48,6 @@ function render(res, page, extra = {}, status = 200) {
 }
 
 for (const [route, page] of Object.entries(PAGES)) app.get(route, (req, res) => render(res, page));
-
-app.get('/merch/:slug', (req, res) => {
-  const p = db.prepare('SELECT * FROM products WHERE slug = ?').get(req.params.slug);
-  if (!p) return render(res, { view: '404', title: 'Not found | CodeCoast', js: [] }, {}, 404);
-  render(res, { view: 'product', title: `${p.name} | CodeCoast Merch`, js: ['product'] }, { SLUG: esc(p.slug) });
-});
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                            */
@@ -81,7 +73,7 @@ setInterval(() => hits.clear(), 10 * 60_000).unref();
 function makeCode(name) {
   const base = (name.replace(/[^a-z]/gi, '').toUpperCase() + 'XXXX').slice(0, 4);
   for (;;) {
-    const code = `CC-${base}${crypto.randomInt(100, 999)}`;
+    const code = `HA-${base}${crypto.randomInt(100, 999)}`;
     if (!db.prepare('SELECT 1 FROM ambassadors WHERE code = ?').get(code)) return code;
   }
 }
@@ -90,7 +82,7 @@ function makeCode(name) {
 /* Public API                                                         */
 /* ------------------------------------------------------------------ */
 const POINTS_PER_MEMBER = 25;
-const TRACKS = ['CodeCoast Open', 'Build For Good'];
+const TRACKS = ['Hack Atrium Open', 'Build For Good'];
 
 app.post('/api/register', limit(5), (req, res) => {
   const b = req.body || {};
@@ -116,7 +108,7 @@ app.post('/api/register', limit(5), (req, res) => {
   const info = db.prepare(`INSERT INTO registrations (team_name,track,leader_name,leader_email,leader_phone,college,members,idea,referral_code)
     VALUES (?,?,?,?,?,?,?,?,?)`).run(team, track, leader.name, leader.email, leader.phone, college, JSON.stringify(members), idea, amb ? ref : null);
   if (amb) db.prepare('UPDATE ambassadors SET points = points + ? WHERE id = ?').run(POINTS_PER_MEMBER * (members.length + 1), amb.id);
-  res.json({ ok: true, id: info.lastInsertRowid, ticket: `CC01-${String(info.lastInsertRowid).padStart(4, '0')}`, referredBy: amb ? amb.name : null });
+  res.json({ ok: true, id: info.lastInsertRowid, ticket: `HA01-${String(info.lastInsertRowid).padStart(4, '0')}`, referredBy: amb ? amb.name : null });
 });
 
 app.post('/api/referrals', limit(5), (req, res) => {
@@ -160,53 +152,11 @@ app.post('/api/contact', limit(5), (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/products', (req, res) => res.json({ ok: true, rows: db.prepare('SELECT * FROM products ORDER BY rowid').all() }));
-app.get('/api/products/:slug', (req, res) => {
-  const p = db.prepare('SELECT * FROM products WHERE slug = ?').get(req.params.slug);
-  p ? res.json({ ok: true, product: p }) : bad(res, 'Not found', 404);
-});
-
-const FITS = { Regular: 0, Oversized: 100 };
-const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-app.post('/api/orders', limit(5), (req, res) => {
-  const b = req.body || {};
-  const d = { name: clean(b.name, 80), email: clean(b.email, 120).toLowerCase(), phone: clean(b.phone, 20), college: clean(b.college, 120) };
-  if (!d.name) return bad(res, 'Please enter your name.');
-  if (!EMAIL.test(d.email)) return bad(res, 'Please enter a valid email address.');
-  if (!PHONE.test(d.phone)) return bad(res, 'Please enter a valid phone number.');
-  if (!Array.isArray(b.items) || !b.items.length || b.items.length > 20) return bad(res, 'Your cart is empty.');
-
-  // Re-price everything on the server — never trust client prices
-  const items = [];
-  for (const it of b.items) {
-    const p = db.prepare('SELECT * FROM products WHERE id = ?').get(String(it.productId));
-    const qty = Math.max(1, Math.min(10, parseInt(it.quantity, 10) || 1));
-    if (!p) return bad(res, 'One of the items is no longer available.');
-    let fit = null, size = null, price = p.price;
-    if (p.has_sizes) {
-      fit = it.fit in FITS ? it.fit : null; size = SIZES.includes(it.size) ? it.size : null;
-      if (!fit || !size) return bad(res, `Please choose a fit and size for ${p.name}.`);
-      price += FITS[fit];
-    }
-    if (p.stock < qty) return bad(res, `Sorry, ${p.name} is out of stock.`);
-    items.push({ productId: p.id, name: p.name, fit, size, quantity: qty, price, lineTotal: price * qty });
-  }
-  const subtotal = items.reduce((s, i) => s + i.lineTotal, 0);
-  const tees = items.filter((i) => i.fit).reduce((s, i) => s + i.quantity, 0);
-  const discount = tees >= 2 ? 50 : 0;
-  const total = subtotal - discount;
-  const ref = 'CCM-' + crypto.randomBytes(3).toString('hex').toUpperCase();
-  db.prepare('INSERT INTO orders (order_ref,name,email,phone,college,items,subtotal,discount,total) VALUES (?,?,?,?,?,?,?,?,?)')
-    .run(ref, d.name, d.email, d.phone, d.college, JSON.stringify(items), subtotal, discount, total);
-  for (const i of items) db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?').run(i.quantity, i.productId);
-  res.json({ ok: true, orderRef: ref, subtotal, discount, total });
-});
-
 /* ------------------------------------------------------------------ */
 /* Admin API (cookie session)                                         */
 /* ------------------------------------------------------------------ */
 const sessions = new Set();
-const cookieToken = (req) => (req.headers.cookie || '').split(';').map((c) => c.trim().split('=')).find(([k]) => k === 'cc_admin')?.[1];
+const cookieToken = (req) => (req.headers.cookie || '').split(';').map((c) => c.trim().split('=')).find(([k]) => k === 'ha_admin')?.[1];
 const requireAdmin = (req, res, next) => (sessions.has(cookieToken(req)) ? next() : bad(res, 'Unauthorised', 401));
 
 app.post('/api/admin/login', limit(8), (req, res) => {
@@ -215,16 +165,15 @@ app.post('/api/admin/login', limit(8), (req, res) => {
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return bad(res, 'Wrong password', 401);
   const t = crypto.randomBytes(24).toString('hex');
   sessions.add(t);
-  res.setHeader('Set-Cookie', `cc_admin=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${60 * 60 * 12}`);
+  res.setHeader('Set-Cookie', `ha_admin=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${60 * 60 * 12}`);
   res.json({ ok: true });
 });
-app.post('/api/admin/logout', (req, res) => { sessions.delete(cookieToken(req)); res.setHeader('Set-Cookie', 'cc_admin=; Path=/; Max-Age=0'); res.json({ ok: true }); });
+app.post('/api/admin/logout', (req, res) => { sessions.delete(cookieToken(req)); res.setHeader('Set-Cookie', 'ha_admin=; Path=/; Max-Age=0'); res.json({ ok: true }); });
 app.get('/api/admin/me', requireAdmin, (req, res) => res.json({ ok: true }));
 
 const TABLES = {
   registrations: { sql: 'SELECT * FROM registrations ORDER BY id DESC', statuses: ['pending', 'shortlisted', 'rejected'] },
   ambassadors: { sql: 'SELECT * FROM ambassadors ORDER BY points DESC, id DESC', statuses: null },
-  orders: { sql: 'SELECT * FROM orders ORDER BY id DESC', statuses: ['pending', 'paid', 'ready', 'collected', 'cancelled'] },
   enquiries: { sql: 'SELECT * FROM enquiries ORDER BY id DESC', statuses: ['new', 'replied', 'closed'] },
 };
 app.get('/api/admin/stats', requireAdmin, (req, res) => {
@@ -233,8 +182,6 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
     teams: n('SELECT COUNT(*) n FROM registrations'),
     hackers: db.prepare('SELECT members FROM registrations').all().reduce((s, r) => s + JSON.parse(r.members).length + 1, 0),
     ambassadors: n('SELECT COUNT(*) n FROM ambassadors'),
-    orders: n('SELECT COUNT(*) n FROM orders WHERE status != \'cancelled\''),
-    revenue: db.prepare("SELECT COALESCE(SUM(total),0) n FROM orders WHERE status IN ('paid','ready','collected')").get().n,
     enquiries: n("SELECT COUNT(*) n FROM enquiries WHERE status = 'new'"),
   } });
 });
@@ -262,6 +209,6 @@ app.get('/api/admin/:table/export.csv', requireAdmin, (req, res) => {
 
 /* 404 */
 app.use('/api', (req, res) => bad(res, 'Not found', 404));
-app.use((req, res) => render(res, { view: '404', title: 'Not found | CodeCoast', js: [] }, {}, 404));
+app.use((req, res) => render(res, { view: '404', title: 'Not found | Hack Atrium', js: [] }, {}, 404));
 
-app.listen(PORT, () => console.log(`🌊 CodeCoast running at http://localhost:${PORT}  (admin: /admin)`));
+app.listen(PORT, () => console.log(`🏛️ Hack Atrium running at http://localhost:${PORT}  (admin: /admin)`));
