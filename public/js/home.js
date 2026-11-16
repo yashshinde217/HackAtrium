@@ -4,13 +4,21 @@
 const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#@$%&*<>/';
 function scramble(el, delay = 0) {
   const final = el.dataset.scramble;
+  const em = el.querySelector('em');
   let frame = 0;
   const total = 38;
   setTimeout(function tick() {
     el.style.opacity = 1;
     const p = frame / total;
+    if (p >= 1) {
+      // Restore final markup (plain text + optional styled <em>)
+      el.textContent = final.replace(/1$/, '');
+      if (em) el.appendChild(em);
+      return;
+    }
     el.textContent = final.split('').map((ch, i) => (ch === ' ' ? ' ' : i / final.length < p ? ch : GLYPHS[(Math.random() * GLYPHS.length) | 0])).join('');
-    if (frame++ < total) requestAnimationFrame(tick); else el.textContent = final;
+    frame++;
+    requestAnimationFrame(tick);
   }, delay);
 }
 $$('[data-scramble]').forEach((el, i) => { el.style.opacity = 0; scramble(el, 700 + i * 260); });
@@ -48,7 +56,14 @@ const hero = $('#hero');
   const smoothStep = (current, target) => current + (target - current) * 0.08;
   
   // Pick a color per cell, fixed for the life of that hover
-  const pickColor = () => Math.random() < 0.5 ? { r: 128, g: 1, b: 31 } : { r: 197, g: 160, b: 89 };
+  const pickColor = () => {
+    const colors = [
+      { r: 128, g: 1, b: 31 },   // Burgundy
+      { r: 197, g: 160, b: 89 }, // Gold
+      { r: 100, g: 40, b: 60 }   // Muted Plum
+    ];
+    return colors[Math.floor(Math.random() * colors.length)];
+  };
 
   hero.addEventListener('mousemove', (e) => {
     const r = hero.getBoundingClientRect();
@@ -147,24 +162,17 @@ const hero = $('#hero');
       c.currentColor.g = smoothStep(c.currentColor.g, c.targetColor.g);
       c.currentColor.b = smoothStep(c.currentColor.b, c.targetColor.b);
       
-      const alpha = c.life * 0.5;
+      // Hovered cells are fully opaque; returning cells fade out
+      const alpha = c.isHovered ? 1 : c.life;
       ctx.fillStyle = `rgba(${Math.round(c.currentColor.r)}, ${Math.round(c.currentColor.g)}, ${Math.round(c.currentColor.b)}, ${alpha})`;
       
-      // Calculate overlap: 2% of cell size = ~1px on each side
+      // Calculate overlap: 2% of cell size
       const overlap = CELL * 0.02 * dpr;
       const x = c.x * CELL * dpr + dpr - overlap;
       const y = c.y * CELL * dpr + dpr - overlap;
       const size = (CELL - 1) * dpr + overlap * 2;
       
       ctx.fillRect(x, y, size, size);
-      
-      // Add subtle glow effect for hovered cells
-      if (c.isHovered && c.life > 0.5) {
-        ctx.shadowBlur = 15 * dpr;
-        ctx.shadowColor = `rgba(${Math.round(c.currentColor.r)}, ${Math.round(c.currentColor.g)}, ${Math.round(c.currentColor.b)}, ${alpha * 0.6})`;
-        ctx.fillRect(x, y, size, size);
-        ctx.shadowBlur = 0;
-      }
     });
     requestAnimationFrame(loop);
   })();
