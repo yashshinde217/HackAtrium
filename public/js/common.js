@@ -199,44 +199,194 @@ $$('[data-count]').forEach((el) => {
   });
 });
 
-/* ---------- magnetic buttons ---------- */
+/* ---------- magnetic buttons (enhanced) ---------- */
 if (FINE) $$('.magnetic').forEach((b) => {
+  const xTo = gsap.quickTo(b, 'x', { duration: .6, ease: 'elastic.out(1, .3)' });
+  const yTo = gsap.quickTo(b, 'y', { duration: .6, ease: 'elastic.out(1, .3)' });
+  
   b.addEventListener('mousemove', (e) => {
     const r = b.getBoundingClientRect();
-    gsap.to(b, { x: (e.clientX - r.left - r.width / 2) * .25, y: (e.clientY - r.top - r.height / 2) * .35, duration: .4 });
+    const x = (e.clientX - r.left - r.width / 2) * .3;
+    const y = (e.clientY - r.top - r.height / 2) * .4;
+    
+    xTo(x);
+    yTo(y);
+    
+    // Add subtle rotation based on cursor position
+    const rotation = (e.clientX - r.left - r.width / 2) / r.width * 4;
+    gsap.to(b, { 
+      rotation: rotation, 
+      duration: .4, 
+      ease: 'power2.out' 
+    });
   });
-  b.addEventListener('mouseleave', () => gsap.to(b, { x: 0, y: 0, duration: .7, ease: 'elastic.out(1,.4)' }));
+  
+  b.addEventListener('mouseleave', () => {
+    xTo(0);
+    yTo(0);
+    gsap.to(b, { 
+      rotation: 0, 
+      duration: .8, 
+      ease: 'elastic.out(1, .4)' 
+    });
+  });
 });
 
-/* ---------- 3D tilt cards (new) ---------- */
+/* ---------- 3D tilt cards (enhanced) ---------- */
 if (FINE && !REDUCE) $$('.tilt').forEach((c) => {
   c.style.transformStyle = 'preserve-3d';
+  c.style.willChange = 'transform';
+  
+  let currentX = 0, currentY = 0;
+  let targetX = 0, targetY = 0;
+  
+  const animate = () => {
+    currentX += (targetX - currentX) * 0.15;
+    currentY += (targetY - currentY) * 0.15;
+    
+    gsap.set(c, {
+      rotateY: currentX,
+      rotateX: currentY,
+      transformPerspective: 1000
+    });
+    
+    if (Math.abs(currentX - targetX) > 0.1 || Math.abs(currentY - targetY) > 0.1) {
+      requestAnimationFrame(animate);
+    }
+  };
+  
   c.addEventListener('mousemove', (e) => {
     const r = c.getBoundingClientRect();
-    const x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
-    gsap.to(c, { rotateY: x * 8, rotateX: -y * 8, transformPerspective: 900, duration: .5, ease: 'power2.out' });
-    c.style.setProperty('--mx', (x + .5) * 100 + '%'); c.style.setProperty('--my', (y + .5) * 100 + '%');
+    const x = (e.clientX - r.left) / r.width - 0.5;
+    const y = (e.clientY - r.top) / r.height - 0.5;
+    
+    targetX = x * 10;
+    targetY = -y * 10;
+    
+    // Update CSS variables for glow effect
+    c.style.setProperty('--mx', (x + 0.5) * 100 + '%');
+    c.style.setProperty('--my', (y + 0.5) * 100 + '%');
+    
+    // Smooth animation
+    animate();
+  
+    // Add subtle scale on hover
+    gsap.to(c, { 
+      scale: 1.02, 
+      duration: .3, 
+      ease: 'power2.out' 
+    });
   });
-  c.addEventListener('mouseleave', () => gsap.to(c, { rotateY: 0, rotateX: 0, duration: .8, ease: 'elastic.out(1,.5)' }));
+  
+  c.addEventListener('mouseleave', () => {
+    targetX = 0;
+    targetY = 0;
+    animate();
+    
+    gsap.to(c, { 
+      scale: 1, 
+      duration: .5, 
+      ease: 'elastic.out(1, .5)' 
+    });
+  });
 });
 
-/* ---------- cursor follower (new) ---------- */
+/* ---------- cursor follower (enhanced) ---------- */
 const cursor = $('#cursor');
 if (FINE && !REDUCE) {
   document.body.classList.add('has-cursor');
-  const xTo = gsap.quickTo(cursor, 'x', { duration: .45, ease: 'power3' });
-  const yTo = gsap.quickTo(cursor, 'y', { duration: .45, ease: 'power3' });
-  addEventListener('mousemove', (e) => { xTo(e.clientX); yTo(e.clientY); });
+  
+  // Smooth cursor following with elastic easing
+  const xTo = gsap.quickTo(cursor, 'x', { duration: .4, ease: 'power3.out' });
+  const yTo = gsap.quickTo(cursor, 'y', { duration: .4, ease: 'power3.out' });
+  
+  // Add subtle scale animation on movement
+  let isMoving = false;
+  let moveTimeout;
+  
+  addEventListener('mousemove', (e) => {
+    xTo(e.clientX);
+    yTo(e.clientY);
+    
+    // Add scale effect when moving
+    if (!isMoving) {
+      isMoving = true;
+      gsap.to(cursor, { scale: 1.1, duration: .2, ease: 'power2.out' });
+    }
+    
+    clearTimeout(moveTimeout);
+    moveTimeout = setTimeout(() => {
+      isMoving = false;
+      gsap.to(cursor, { scale: 1, duration: .3, ease: 'elastic.out(1, .5)' });
+    }, 150);
+  });
+  
+  // Enhanced hover detection with multiple interactive elements
   document.addEventListener('mouseover', (e) => {
-    const t = e.target.closest('a, button, .folder, .gal-item, .dome-item, label, input, select, textarea');
-    cursor.classList.toggle('hover', !!t && !t.matches('input, textarea, select'));
-    cursor.classList.toggle('text', !!t && t.matches('input, textarea'));
+    const interactive = e.target.closest('a, button, .folder, .gal-item, .dome-item, label, input, select, textarea, .magnetic, [role="button"]');
+    const isText = e.target.closest('input:not([type="submit"]):not([type="button"]), textarea');
+    
+    // Hover state
+    cursor.classList.toggle('hover', !!interactive && !isText);
+    
+    // Text input state
+    cursor.classList.toggle('text', !!isText);
+    
+    // Get custom cursor label
     const label = e.target.closest('[data-cursor]')?.dataset.cursor || '';
     cursor.querySelector('span').textContent = label;
     cursor.classList.toggle('label', !!label);
+    
+    // Add elastic bounce on hover state change
+    if (interactive && !isText) {
+      gsap.to(cursor, { 
+        scale: 1.15, 
+        duration: .3, 
+        ease: 'back.out(1.7)' 
+      });
+    } else if (isText) {
+      gsap.to(cursor, { 
+        scaleY: 1.2, 
+        scaleX: 0.9, 
+        duration: .3, 
+        ease: 'back.out(1.7)' 
+      });
+    } else {
+      gsap.to(cursor, { 
+        scale: 1, 
+        duration: .4, 
+        ease: 'elastic.out(1, .5)' 
+      });
+    }
   });
-  document.addEventListener('mouseleave', () => cursor.classList.add('gone'));
-  document.addEventListener('mouseenter', () => cursor.classList.remove('gone'));
+  
+  // Smooth exit/enter animations
+  document.addEventListener('mouseleave', () => {
+    cursor.classList.add('gone');
+    gsap.to(cursor, { scale: 0.8, duration: .3, ease: 'power2.in' });
+  });
+  
+  document.addEventListener('mouseenter', () => {
+    cursor.classList.remove('gone');
+    gsap.to(cursor, { scale: 1, duration: .4, ease: 'back.out(1.5)' });
+  });
+  
+  // Add click pulse effect
+  document.addEventListener('mousedown', () => {
+    gsap.to(cursor, { 
+      scale: 0.85, 
+      duration: .15, 
+      ease: 'power2.in' 
+    });
+  });
+  
+  document.addEventListener('mouseup', () => {
+    gsap.to(cursor, { 
+      scale: 1, 
+      duration: .3, 
+      ease: 'elastic.out(1, .4)' 
+    });
+  });
 }
 
 /* ---------- form helper ---------- */

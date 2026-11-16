@@ -14,43 +14,157 @@ function scramble(el, delay = 0) {
   }, delay);
 }
 $$('[data-scramble]').forEach((el, i) => { el.style.opacity = 0; scramble(el, 700 + i * 260); });
-// re-scramble on hover
-$$('[data-scramble]').forEach((el) => el.addEventListener('mouseenter', () => { if (el.textContent === el.dataset.scramble) scramble(el, 0); }));
+// Removed hover re-scramble to prevent text movement on hover
 
 gsap.from('.site-nav > *', { y: -30, opacity: 0, duration: .9, stagger: .1, delay: .5, ease: 'power3.out' });
 gsap.from('.hero .reveal-up', { y: 40, opacity: 0, duration: 1, stagger: .15, delay: .8, ease: 'power3.out' });
 gsap.from('.spin-badge', { scale: 0, rotate: -180, duration: 1.2, delay: 1.2, ease: 'back.out(1.6)' });
 gsap.from('.hero-bubble', { scale: 0, duration: .6, delay: 1.5, ease: 'back.out(3)' });
 
-/* glow follows cursor */
-const hero = $('#hero'), glow = $('.hero-glow');
-hero.addEventListener('mousemove', (e) => {
-  const r = hero.getBoundingClientRect();
-  gsap.to(glow, { left: e.clientX - r.left, top: e.clientY - r.top, duration: .8, ease: 'power3.out' });
-});
-gsap.to('.hero-title', { yPercent: -25, opacity: .3, ease: 'none', scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: true } });
+// Removed glow follows cursor effect - keeping only the grid animation
+// const hero = $('#hero'), glow = $('.hero-glow');
+// hero.addEventListener('mousemove', (e) => {
+//   const r = hero.getBoundingClientRect();
+//   gsap.to(glow, { left: e.clientX - r.left, top: e.clientY - r.top, duration: .8, ease: 'power3.out' });
+// });
 
-/* ---------- hero: pixel trail on the grid (new) ---------- */
+// Keep hero variable for grid animation
+const hero = $('#hero');
+// Removed scrollTrigger animation to prevent title movement
+// gsap.to('.hero-title', { yPercent: -25, opacity: .3, ease: 'none', scrollTrigger: { trigger: hero, start: 'top top', end: 'bottom top', scrub: true } });
+
+/* ---------- hero: enhanced pixel trail on the grid ---------- */
 (function pixelTrail() {
   const cv = $('#heroPixels');
   if (!cv || REDUCE) return;
   const ctx = cv.getContext('2d');
   const CELL = 54;
-  let cells = new Map(), w, h, dpr;
+  let cells = new Map(), w, h, dpr, hoveredCell = null;
+  let hoverOrder = []; // Track order of hovered cells
   const size = () => { dpr = Math.min(devicePixelRatio, 2); w = cv.width = hero.clientWidth * dpr; h = cv.height = hero.clientHeight * dpr; };
   size(); addEventListener('resize', size);
+  
+  // Smooth color transition with easing
+  const smoothStep = (current, target) => current + (target - current) * 0.08;
+  
+  // Pick a color per cell, fixed for the life of that hover
+  const pickColor = () => Math.random() < 0.5 ? { r: 128, g: 1, b: 31 } : { r: 197, g: 160, b: 89 };
+
   hero.addEventListener('mousemove', (e) => {
     const r = hero.getBoundingClientRect();
-    const cx = Math.floor((e.clientX - r.left) / CELL), cy = Math.floor((e.clientY - r.top) / CELL);
-    cells.set(cx + ',' + cy, { x: cx, y: cy, life: 1, c: Math.random() < .5 ? '128,1,31' : '197,160,89' });
+    const cx = Math.floor((e.clientX - r.left) / CELL);
+    const cy = Math.floor((e.clientY - r.top) / CELL);
+    const key = cx + ',' + cy;
+
+    // Ignore moves that stay inside the current hovered cell
+    if (hoveredCell === key) {
+      const cur = cells.get(key);
+      if (cur) cur.life = 1;
+      return;
+    }
+
+    // Remove current key from hover order so re-entry moves it to the end
+    const existingIndex = hoverOrder.indexOf(key);
+    if (existingIndex > -1) hoverOrder.splice(existingIndex, 1);
+
+    // Previous cell starts returning to black plum with a staggered delay
+    if (hoveredCell) {
+      const prev = cells.get(hoveredCell);
+      if (prev) {
+        prev.isHovered = false;
+        const delay = Math.max(0, hoverOrder.indexOf(hoveredCell)) * 200;
+        if (prev.returnTimer) clearTimeout(prev.returnTimer);
+        prev.returnTimer = setTimeout(() => {
+          prev.targetColor = { r: 23, g: 2, b: 8 }; // Black plum
+          prev.returnTimer = null;
+        }, delay);
+      }
+    }
+
+    hoverOrder.push(key);
+    hoveredCell = key;
+
+    const existing = cells.get(key);
+    if (existing) {
+      // Re-entering the same cell keeps its original color
+      existing.life = 1;
+      existing.isHovered = true;
+      if (existing.returnTimer) {
+        clearTimeout(existing.returnTimer);
+        existing.returnTimer = null;
+      }
+    } else {
+      // New cell: assign color once and keep it stable while hovered
+      cells.set(key, {
+        x: cx,
+        y: cy,
+        life: 1,
+        currentColor: { r: 23, g: 2, b: 8 }, // Start with black plum
+        targetColor: pickColor(),
+        isHovered: true,
+        returnDelay: 0,
+        returnTimer: null
+      });
+    }
   });
+
+  // Remove hover state when mouse leaves
+  hero.addEventListener('mouseleave', () => {
+    if (hoveredCell) {
+      const cell = cells.get(hoveredCell);
+      if (cell) {
+        cell.isHovered = false;
+        // Calculate delay for the last hovered cell
+        const delay = hoverOrder.indexOf(hoveredCell) * 200;
+        cell.returnTimer = setTimeout(() => {
+          cell.targetColor = { r: 23, g: 2, b: 8 }; // Black plum
+        }, delay);
+      }
+      hoveredCell = null;
+    }
+    
+    // Clear hover order after a delay
+    setTimeout(() => {
+      hoverOrder = [];
+    }, 1000);
+  });
+  
   (function loop() {
     ctx.clearRect(0, 0, w, h);
     cells.forEach((c, k) => {
-      c.life -= .02;
-      if (c.life <= 0) return cells.delete(k);
-      ctx.fillStyle = `rgba(${c.c},${c.life * .35})`;
-      ctx.fillRect(c.x * CELL * dpr + dpr, c.y * CELL * dpr + dpr, (CELL - 1) * dpr, (CELL - 1) * dpr);
+      // Always reduce life if not hovered
+      if (!c.isHovered) {
+        c.life -= 0.015;
+        if (c.life <= 0) {
+          if (c.returnTimer) clearTimeout(c.returnTimer);
+          cells.delete(k);
+          return;
+        }
+      }
+      
+      // Smooth color interpolation
+      c.currentColor.r = smoothStep(c.currentColor.r, c.targetColor.r);
+      c.currentColor.g = smoothStep(c.currentColor.g, c.targetColor.g);
+      c.currentColor.b = smoothStep(c.currentColor.b, c.targetColor.b);
+      
+      const alpha = c.life * 0.5;
+      ctx.fillStyle = `rgba(${Math.round(c.currentColor.r)}, ${Math.round(c.currentColor.g)}, ${Math.round(c.currentColor.b)}, ${alpha})`;
+      
+      // Calculate overlap: 2% of cell size = ~1px on each side
+      const overlap = CELL * 0.02 * dpr;
+      const x = c.x * CELL * dpr + dpr - overlap;
+      const y = c.y * CELL * dpr + dpr - overlap;
+      const size = (CELL - 1) * dpr + overlap * 2;
+      
+      ctx.fillRect(x, y, size, size);
+      
+      // Add subtle glow effect for hovered cells
+      if (c.isHovered && c.life > 0.5) {
+        ctx.shadowBlur = 15 * dpr;
+        ctx.shadowColor = `rgba(${Math.round(c.currentColor.r)}, ${Math.round(c.currentColor.g)}, ${Math.round(c.currentColor.b)}, ${alpha * 0.6})`;
+        ctx.fillRect(x, y, size, size);
+        ctx.shadowBlur = 0;
+      }
     });
     requestAnimationFrame(loop);
   })();
